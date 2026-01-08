@@ -26,6 +26,11 @@ const mouse = {
     y: canvas.height / 2
 };
 
+// Bullets array
+const bullets = [];
+const bulletSpeed = 10;
+const bulletSize = 5;
+
 // keys state
 const keys = {
     w: false,
@@ -64,13 +69,33 @@ const playerImage = new Image();
 playerImage.src = 'assets/ships/ship-001.png';
 let imageLoaded = false;
 
+const bulletImage = new Image();
+bulletImage.src = 'assets/bullets/bullet-001.png';
+let bulletImageLoaded = false;
+
 playerImage.onload = () => { imageLoaded = true; };
 playerImage.onerror = () => { console.error('failed to load iamge from ' + playerImage.src); };
+
+bulletImage.onload = () => { bulletImageLoaded = true; };
+bulletImage.onerror = () => { console.error('failed to load bullet image from ' + bulletImage.src); };
 
 canvas.addEventListener('mousemove', (e) => {
     const rect = canvas.getBoundingClientRect();
     mouse.x = e.clientX - rect.left;
     mouse.y = e.clientY - rect.top;
+});
+
+canvas.addEventListener('click', (e) => {
+    if (HitboxHelper.isPointInHitbox(mouse.x, mouse.y, player)) { return; }
+    const bullet = {
+        x: player.x,
+        y: player.y,
+        angle: player.angle,
+        vx: Math.cos(player.angle) * bulletSpeed,
+        vy: Math.sin(player.angle) * bulletSpeed,
+        size: bulletSize
+    };
+    bullets.push(bullet);
 });
 
 const InputHelper = {
@@ -186,8 +211,6 @@ const PlayerMovement = {
 function drawPlayer() {
     ctx.save();
     ctx.translate(player.x, player.y);
-    // Rotate with offset: subtract 90 degrees (Math.PI/2) if your image points up
-    // The default angle calculation assumes the image points right (0 degrees)
     ctx.rotate(player.angle + Math.PI / 2);
     ctx.imageSmoothingEnabled = false;
     
@@ -209,11 +232,51 @@ function drawPlayer() {
         HitboxHelper.drawHitbox(ctx, player, '#00ff00');
     }
 }
+function updateBullets() {
+    for (let i = bullets.length - 1; i >= 0; i--) {
+        const bullet = bullets[i];
+        bullet.x += bullet.vx;
+        bullet.y += bullet.vy;
+        // remove bullet if it goes offscreen
+        if (bullet.x < 0 || bullet.x > canvas.width || 
+            bullet.y < 0 || bullet.y > canvas.height) {
+            bullets.splice(i, 1);
+        }
+    }
+}
+
+// draw bullets
+function drawBullets() {
+    for (const bullet of bullets) {
+        ctx.save();
+        ctx.translate(bullet.x, bullet.y);
+        ctx.rotate(bullet.angle); // rotate bullet to match angle
+        ctx.imageSmoothingEnabled = false;
+        
+        if (bulletImageLoaded) {
+            ctx.drawImage(
+                bulletImage,
+                -bullet.size,
+                -bullet.size,
+                bullet.size * 2,
+                bullet.size * 2
+            );
+        } else { console.warn('bullet image not loaded, cannot draw bullet.'); }
+        
+        ctx.restore();
+    }
+}
+
 function gameLoop() {
     ctx.fillStyle = '#000000';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
     PlayerMovement.update(player, mouse, keys, { width: canvas.width, height: canvas.height });
+    updateBullets();
+    
     drawPlayer();
+    drawBullets();
+    
     requestAnimationFrame(gameLoop);
 }
 window.addEventListener('resize', () => {
