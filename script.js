@@ -93,7 +93,13 @@ canvas.addEventListener('click', (e) => {
         angle: player.angle,
         vx: Math.cos(player.angle) * bulletSpeed,
         vy: Math.sin(player.angle) * bulletSpeed,
-        size: bulletSize
+        size: bulletSize,
+        hitbox: {
+            width: bulletSize * 2,
+            height: bulletSize * 2,
+            offsetX: 0,
+            offsetY: 0
+        }
     };
     bullets.push(bullet);
 });
@@ -226,8 +232,7 @@ function drawPlayer() {
     } else { console.warn('player image not loaded, cannot draw player.'); }
     
     ctx.restore();
-    
-    // Draw hitbox only if debug mode is enabled (toggle with F3)
+
     if (showHitboxes) {
         HitboxHelper.drawHitbox(ctx, player, '#00ff00');
     }
@@ -264,6 +269,10 @@ function drawBullets() {
         } else { console.warn('bullet image not loaded, cannot draw bullet.'); }
         
         ctx.restore();
+
+        if (showHitboxes) {
+            HitboxHelper.drawHitbox(ctx, bullet, '#0000ff');
+        }
     }
 }
 
