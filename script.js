@@ -3,14 +3,24 @@ const ctx = canvas.getContext('2d');
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
+let playerAngle = 0;
+
 // player object
 const player = {
     x: canvas.width / 2,
     y: canvas.height / 2,
     size: 20,
     angle: Math.PI / 2,
-    speed: 5
+    speed: 5,
+    // hitbox properties
+    hitbox: {
+        width: 30,
+        height: 30,
+        offsetX: 0,
+        offsetY: 0
+    }
 };
+
 const mouse = {
     x: canvas.width / 2,
     y: canvas.height / 2
@@ -58,13 +68,75 @@ canvas.addEventListener('mousemove', (e) => {
     mouse.y = e.clientY - rect.top;
 });
 
+const InputHelper = {
+    isAnyKeyPressed(keyArray, keyStates) {
+        return keyArray.some(key => keyStates[key] === true);
+    },
+    areAllKeysPressed(keyArray, keyStates) {
+        return keyArray.every(key => keyStates[key] === true);
+    },
+    getPressedKeys(keyStates) {
+        return Object.keys(keyStates).filter(key => keyStates[key] === true);
+    },
+    isKeyPressed(key, keyStates) {
+        return keyStates[key] === true;
+    }
+};
+
+const HitboxHelper = {
+    // Get axis-aligned bounding box for an entity
+    getAABB(entity) {
+        return {
+            x: entity.x - entity.hitbox.width / 2 + entity.hitbox.offsetX,
+            y: entity.y - entity.hitbox.height / 2 + entity.hitbox.offsetY,
+            width: entity.hitbox.width,
+            height: entity.hitbox.height
+        };
+    },
+
+    // Check collision between two entities with hitboxes
+    checkCollision(entity1, entity2) {
+        const box1 = this.getAABB(entity1);
+        const box2 = this.getAABB(entity2);
+
+        return (
+            box1.x < box2.x + box2.width &&
+            box1.x + box1.width > box2.x &&
+            box1.y < box2.y + box2.height &&
+            box1.y + box1.height > box2.y
+        );
+    },
+
+    // Draw hitbox for debugging
+    drawHitbox(ctx, entity, color = '#ff0000') {
+        const box = this.getAABB(entity);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(box.x, box.y, box.width, box.height);
+    },
+
+    // Check if a point (x, y) is within an entity's hitbox
+    isPointInHitbox(x, y, entity) {
+        const box = this.getAABB(entity);
+        return (
+            x >= box.x &&
+            x <= box.x + box.width &&
+            y >= box.y &&
+            y <= box.y + box.height
+        );
+    }
+};
+
 const PlayerMovement = {
     updateAngle(playerObj, mousePos) {
-        const dx = mousePos.x - playerObj.x;
-        const dy = mousePos.y - playerObj.y;
-        playerObj.angle = Math.atan2(dy, dx);
-        playerObj.angle += Math.PI * 2; // adjust for image orientation
+        // Only update angle if mouse is outside the hitbox (prevents jittering)
+        if (!HitboxHelper.isPointInHitbox(mousePos.x, mousePos.y, playerObj)) {
+            const dx = mousePos.x - playerObj.x;
+            const dy = mousePos.y - playerObj.y;
+            playerObj.angle = Math.atan2(dy, dx);
+        }
     },
+    
     getMovementVectors(angle) {
         return {
             forward: { x: Math.cos(angle), y: Math.sin(angle) },
@@ -73,22 +145,27 @@ const PlayerMovement = {
     },
 
     // apply movement based on key states
-    applyMovement(playerObj, keyStates, vectors) {
+    applyMovement(playerObj, keyStates, vectors, mousePos) {
+        // Don't move if mouse is within the hitbox
+        if (HitboxHelper.isPointInHitbox(mousePos.x, mousePos.y, playerObj)) {
+            return;
+        }
+        
         const { forward, right } = vectors;
         
-        if (keyStates.w) {
+        if (InputHelper.isKeyPressed('w', keyStates)) {
             playerObj.x += forward.x * playerObj.speed;
             playerObj.y += forward.y * playerObj.speed;
         }
-        if (keyStates.s) {
+        if (InputHelper.isKeyPressed('s', keyStates)) {
             playerObj.x -= forward.x * playerObj.speed;
             playerObj.y -= forward.y * playerObj.speed;
         }
-        if (keyStates.a) {
+        if (InputHelper.isKeyPressed('a', keyStates)) {
             playerObj.x -= right.x * playerObj.speed;
             playerObj.y -= right.y * playerObj.speed;
         }
-        if (keyStates.d) {
+        if (InputHelper.isKeyPressed('d', keyStates)) {
             playerObj.x += right.x * playerObj.speed;
             playerObj.y += right.y * playerObj.speed;
         }
@@ -103,7 +180,7 @@ const PlayerMovement = {
     update(playerObj, mousePos, keyStates, bounds) {
         this.updateAngle(playerObj, mousePos);
         const vectors = this.getMovementVectors(playerObj.angle);
-        this.applyMovement(playerObj, keyStates, vectors);
+        this.applyMovement(playerObj, keyStates, vectors, mousePos);
         this.constrainPlayer(playerObj, bounds);
     }
 };
@@ -131,6 +208,9 @@ function drawPlayer() {
     }
     
     ctx.restore();
+    
+    // Draw hitbox for debugging (comment out in production)
+    HitboxHelper.drawHitbox(ctx, player, '#00ff00');
 }
 function gameLoop() {
     ctx.fillStyle = '#000000';
