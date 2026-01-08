@@ -34,11 +34,21 @@ const keys = {
     d: false
 };
 
+// Debug flag for hitbox display
+let showHitboxes = false;
+
 // Keyboard event listeners
 window.addEventListener('keydown', (e) => {
     const key = e.key.toLowerCase();
     if (key in keys) {
         keys[key] = true;
+    }
+    
+    // Toggle hitbox display with F3
+    if (e.key === 'F3') {
+        e.preventDefault();
+        showHitboxes = !showHitboxes;
+        console.log('Hitbox display:', showHitboxes ? 'ON' : 'OFF');
     }
 });
 
@@ -54,13 +64,8 @@ const playerImage = new Image();
 playerImage.src = 'assets/ships/ship-001.png';
 let imageLoaded = false;
 
-playerImage.onload = () => {
-    imageLoaded = true;
-};
-
-playerImage.onerror = () => {
-    console.error('failed to load iamge from ' + playerImage.src);
-};
+playerImage.onload = () => { imageLoaded = true; };
+playerImage.onerror = () => { console.error('failed to load iamge from ' + playerImage.src); };
 
 canvas.addEventListener('mousemove', (e) => {
     const rect = canvas.getBoundingClientRect();
@@ -69,22 +74,14 @@ canvas.addEventListener('mousemove', (e) => {
 });
 
 const InputHelper = {
-    isAnyKeyPressed(keyArray, keyStates) {
-        return keyArray.some(key => keyStates[key] === true);
-    },
-    areAllKeysPressed(keyArray, keyStates) {
-        return keyArray.every(key => keyStates[key] === true);
-    },
-    getPressedKeys(keyStates) {
-        return Object.keys(keyStates).filter(key => keyStates[key] === true);
-    },
-    isKeyPressed(key, keyStates) {
-        return keyStates[key] === true;
-    }
+    isAnyKeyPressed(keyArray, keyStates) { return keyArray.some(key => keyStates[key] === true); },
+    areAllKeysPressed(keyArray, keyStates) { return keyArray.every(key => keyStates[key] === true); },
+    getPressedKeys(keyStates) { return Object.keys(keyStates).filter(key => keyStates[key] === true); },
+    isKeyPressed(key, keyStates) { return keyStates[key] === true; }
 };
 
 const HitboxHelper = {
-    // Get axis-aligned bounding box for an entity
+    // get bounding box for an entity
     getAABB(entity) {
         return {
             x: entity.x - entity.hitbox.width / 2 + entity.hitbox.offsetX,
@@ -94,7 +91,7 @@ const HitboxHelper = {
         };
     },
 
-    // Check collision between two entities with hitboxes
+    // check for entity - entity collision
     checkCollision(entity1, entity2) {
         const box1 = this.getAABB(entity1);
         const box2 = this.getAABB(entity2);
@@ -107,7 +104,7 @@ const HitboxHelper = {
         );
     },
 
-    // Draw hitbox for debugging
+    // draw hitbox for debugging
     drawHitbox(ctx, entity, color = '#ff0000') {
         const box = this.getAABB(entity);
         ctx.strokeStyle = color;
@@ -203,14 +200,14 @@ function drawPlayer() {
             player.size * 2, 
             player.size * 2
         );
-    } else {
-        console.warn('player image not loaded, cannot draw player.');
-    }
+    } else { console.warn('player image not loaded, cannot draw player.'); }
     
     ctx.restore();
     
-    // Draw hitbox for debugging (comment out in production)
-    HitboxHelper.drawHitbox(ctx, player, '#00ff00');
+    // Draw hitbox only if debug mode is enabled (toggle with F3)
+    if (showHitboxes) {
+        HitboxHelper.drawHitbox(ctx, player, '#00ff00');
+    }
 }
 function gameLoop() {
     ctx.fillStyle = '#000000';
