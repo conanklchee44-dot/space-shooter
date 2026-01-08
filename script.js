@@ -8,12 +8,48 @@ const player = {
     x: canvas.width / 2,
     y: canvas.height / 2,
     size: 20,
-    angle: 0,
+    angle: Math.PI / 2,
     speed: 5
 };
 const mouse = {
     x: canvas.width / 2,
     y: canvas.height / 2
+};
+
+// keys state
+const keys = {
+    w: false,
+    a: false,
+    s: false,
+    d: false
+};
+
+// Keyboard event listeners
+window.addEventListener('keydown', (e) => {
+    const key = e.key.toLowerCase();
+    if (key in keys) {
+        keys[key] = true;
+    }
+});
+
+window.addEventListener('keyup', (e) => {
+    const key = e.key.toLowerCase();
+    if (key in keys) {
+        keys[key] = false;
+    }
+});
+
+// load player image
+const playerImage = new Image();
+playerImage.src = 'assets/ships/ship-001.png';
+let imageLoaded = false;
+
+playerImage.onload = () => {
+    imageLoaded = true;
+};
+
+playerImage.onerror = () => {
+    console.error('failed to load iamge from ' + playerImage.src);
 };
 
 canvas.addEventListener('mousemove', (e) => {
@@ -27,6 +63,7 @@ const PlayerMovement = {
         const dx = mousePos.x - playerObj.x;
         const dy = mousePos.y - playerObj.y;
         playerObj.angle = Math.atan2(dy, dx);
+        playerObj.angle += Math.PI * 2; // adjust for image orientation
     },
     getMovementVectors(angle) {
         return {
@@ -35,7 +72,7 @@ const PlayerMovement = {
         };
     },
 
-    // Apply movement based on input keys
+    // apply movement based on key states
     applyMovement(playerObj, keyStates, vectors) {
         const { forward, right } = vectors;
         
@@ -67,7 +104,7 @@ const PlayerMovement = {
         this.updateAngle(playerObj, mousePos);
         const vectors = this.getMovementVectors(playerObj.angle);
         this.applyMovement(playerObj, keyStates, vectors);
-        this.constrainToBounds(playerObj, bounds);
+        this.constrainPlayer(playerObj, bounds);
     }
 };
 
@@ -75,18 +112,23 @@ const PlayerMovement = {
 function drawPlayer() {
     ctx.save();
     ctx.translate(player.x, player.y);
-    ctx.rotate(player.angle);
-    ctx.beginPath();
-    ctx.moveTo(player.size, 0);
-    ctx.lineTo(-player.size / 2, player.size / 2);
-    ctx.lineTo(-player.size / 2, -player.size / 2);
-    ctx.closePath();
+    // Rotate with offset: subtract 90 degrees (Math.PI/2) if your image points up
+    // The default angle calculation assumes the image points right (0 degrees)
+    ctx.rotate(player.angle + Math.PI / 2);
+    ctx.imageSmoothingEnabled = false;
     
-    ctx.fillStyle = '#00ff00';
-    ctx.fill();
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 2;
-    ctx.stroke();
+    if (imageLoaded) {
+        // draw image
+        ctx.drawImage(
+            playerImage, 
+            -player.size, 
+            -player.size, 
+            player.size * 2, 
+            player.size * 2
+        );
+    } else {
+        console.warn('player image not loaded, cannot draw player.');
+    }
     
     ctx.restore();
 }
