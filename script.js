@@ -2,8 +2,9 @@ const canvas = document.getElementById('game-canvas');
 const ctx = canvas.getContext('2d');
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
-
+const scoreElement = document.getElementById('scoreElement');
 let playerAngle = 0;
+let score = 0;
 
 // player object
 const player = {
@@ -26,10 +27,14 @@ const mouse = {
     y: canvas.height / 2
 };
 
-// Bullets array
+
 const bullets = [];
 const bulletSpeed = 10;
-const bulletSize = 5;
+const bulletSize = 8;
+
+const enemies = [];
+const enemySize = 32;
+const enemySpeed = 2;
 
 // keys state
 const keys = {
@@ -73,11 +78,18 @@ const bulletImage = new Image();
 bulletImage.src = 'assets/bullets/bullet-001.png';
 let bulletImageLoaded = false;
 
+const enemyImage = new Image();
+enemyImage.src = 'enemy.png'; // Change to your UFO sprite path
+let enemyImageLoaded = false;
+
 playerImage.onload = () => { imageLoaded = true; };
 playerImage.onerror = () => { console.error('failed to load iamge from ' + playerImage.src); };
 
 bulletImage.onload = () => { bulletImageLoaded = true; };
 bulletImage.onerror = () => { console.error('failed to load bullet image from ' + bulletImage.src); };
+
+enemyImage.onload = () => { enemyImageLoaded = true; };
+enemyImage.onerror = () => { console.error('failed to load enemy image from ' + enemyImage.src); };
 
 canvas.addEventListener('mousemove', (e) => {
     const rect = canvas.getBoundingClientRect();
@@ -276,15 +288,120 @@ function drawBullets() {
     }
 }
 
+// Spawn enemy UFO
+function spawnEnemy() {
+    let x, y;
+    const edge = Math.floor(Math.random() * 4); 
+    
+    switch(edge) {
+        case 0: // top
+            x = Math.random() * canvas.width;
+            y = -enemySize;
+            break;
+        case 1: // right
+            x = canvas.width + enemySize;
+            y = Math.random() * canvas.height;
+            break;
+        case 2: // bottom
+            x = Math.random() * canvas.width;
+            y = canvas.height + enemySize;
+            break;
+        case 3: // left
+            x = -enemySize;
+            y = Math.random() * canvas.height;
+            break;
+    }
+    
+    // Random velocity for floating effect
+    const angle = Math.random() * Math.PI * 2;
+    const speed = enemySpeed * (0.5 + Math.random() * 0.5); // Random speed variation
+    
+    const enemy = {
+        x: x,
+        y: y,
+        size: enemySize,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        angle: angle,
+        hitbox: {
+            width: enemySize * 1.5,
+            height: enemySize * 1.5,
+            offsetX: 0,
+            offsetY: 0
+        }
+    };
+    
+    enemies.push(enemy);
+}
+
+function updateEnemies() {
+    for (let i = enemies.length - 1; i >= 0; i--) {
+        const enemy = enemies[i];
+        enemy.x += enemy.vx;
+        enemy.y += enemy.vy;
+        enemy.angle += 0.02;
+        enemy.vx += Math.sin(enemy.angle) * 0.05;
+        enemy.vy += Math.cos(enemy.angle) * 0.05;
+        const speed = Math.sqrt(enemy.vx * enemy.vx + enemy.vy * enemy.vy);
+        if (speed > enemySpeed * 1.5) {
+            enemy.vx = (enemy.vx / speed) * enemySpeed * 1.5;
+            enemy.vy = (enemy.vy / speed) * enemySpeed * 1.5;
+        }
+        if (enemy.x < -100 || enemy.x > canvas.width + 100 || 
+            enemy.y < -100 || enemy.y > canvas.height + 100) {
+            enemies.splice(i, 1);
+        }
+    }
+}
+
+// Draw enemies
+function drawEnemies() {
+    for (const enemy of enemies) {
+        ctx.save();
+        ctx.translate(enemy.x, enemy.y);
+        ctx.rotate(enemy.angle);
+        ctx.imageSmoothingEnabled = false;
+        
+        if (enemyImageLoaded) {
+            ctx.drawImage(
+                enemyImage,
+                -enemy.size,
+                -enemy.size,
+                enemy.size * 2,
+                enemy.size * 2
+            );
+        } else {
+            // Fallback: draw red circle if image not loaded
+            ctx.fillStyle = '#ff0000';
+            ctx.beginPath();
+            ctx.arc(0, 0, enemy.size, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        
+        ctx.restore();
+        
+        if (showHitboxes) {
+            HitboxHelper.drawHitbox(ctx, enemy, '#ff0000');
+        }
+    }
+}
+
 function gameLoop() {
     ctx.fillStyle = '#000000';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     
+    // Spawn enemies randomly
+    if (Math.random() < 0.02) { // 2% chance each frame
+        spawnEnemy();
+    }
+    
     PlayerMovement.update(player, mouse, keys, { width: canvas.width, height: canvas.height });
     updateBullets();
+    updateEnemies();
     
     drawPlayer();
     drawBullets();
+    drawEnemies();
     
     requestAnimationFrame(gameLoop);
 }
