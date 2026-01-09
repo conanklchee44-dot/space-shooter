@@ -2,7 +2,7 @@ const canvas = document.getElementById('game-canvas');
 const ctx = canvas.getContext('2d');
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
-const scoreElement = document.getElementById('scoreElement');
+const scoreElement = document.getElementById('score');
 let playerAngle = 0;
 let score = 0;
 
@@ -347,9 +347,23 @@ function updateEnemies() {
             enemy.vx = (enemy.vx / speed) * enemySpeed * 1.5;
             enemy.vy = (enemy.vy / speed) * enemySpeed * 1.5;
         }
-        if (enemy.x < -100 || enemy.x > canvas.width + 100 || 
-            enemy.y < -100 || enemy.y > canvas.height + 100) {
-            enemies.splice(i, 1);
+        
+        const margin = enemySize * 2;
+        if (enemy.x < -margin) enemy.x = canvas.width + margin;
+        if (enemy.x > canvas.width + margin) enemy.x = -margin;
+        if (enemy.y < -margin) enemy.y = canvas.height + margin;
+        if (enemy.y > canvas.height + margin) enemy.y = -margin;
+        
+        // Check collision with bullets only (not player)
+        for (let j = bullets.length - 1; j >= 0; j--) {
+            const bullet = bullets[j];
+            if (HitboxHelper.checkCollision(bullet, enemy)) {
+                bullets.splice(j, 1);
+                enemies.splice(i, 1);
+                score += 10;
+                scoreElement.textContent = 'Score: ' + score;
+                break;
+            }
         }
     }
 }
