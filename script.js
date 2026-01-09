@@ -15,6 +15,7 @@ const player = {
     speed: 5,
     // hitbox properties
     hitbox: {
+        type: 'rect',
         width: 30,
         height: 30,
         offsetX: 0,
@@ -33,7 +34,7 @@ const bulletSpeed = 10;
 const bulletSize = 8;
 
 const enemies = [];
-const enemySize = 32;
+const enemySize = Math.random() * 64 + 64; // 64 to 128
 const enemySpeed = 2;
 
 // keys state
@@ -69,7 +70,7 @@ window.addEventListener('keyup', (e) => {
     }
 });
 
-// load player image
+// images
 const playerImage = new Image();
 playerImage.src = 'assets/ships/ship-001.png';
 let imageLoaded = false;
@@ -79,7 +80,7 @@ bulletImage.src = 'assets/bullets/bullet-001.png';
 let bulletImageLoaded = false;
 
 const enemyImage = new Image();
-enemyImage.src = 'enemy.png'; // Change to your UFO sprite path
+enemyImage.src = 'assets/asteroid.png'
 let enemyImageLoaded = false;
 
 playerImage.onload = () => { imageLoaded = true; };
@@ -107,6 +108,7 @@ canvas.addEventListener('click', (e) => {
         vy: Math.sin(player.angle) * bulletSpeed,
         size: bulletSize,
         hitbox: {
+            type: 'rect',
             width: bulletSize * 2,
             height: bulletSize * 2,
             offsetX: 0,
@@ -134,8 +136,25 @@ const HitboxHelper = {
         };
     },
 
-    // check for entity - entity collision
+    // check for entity - entity collision (supports both rect and circle)
     checkCollision(entity1, entity2) {
+        // Circle to Circle collision
+        if (entity1.hitbox.type === 'circle' && entity2.hitbox.type === 'circle') {
+            const dx = entity1.x - entity2.x;
+            const dy = entity1.y - entity2.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            return distance < (entity1.hitbox.radius + entity2.hitbox.radius);
+        }
+        
+        // Circle to Rect collision
+        if (entity1.hitbox.type === 'circle' && entity2.hitbox.type === 'rect') {
+            return this.circleRectCollision(entity1, entity2);
+        }
+        if (entity1.hitbox.type === 'rect' && entity2.hitbox.type === 'circle') {
+            return this.circleRectCollision(entity2, entity1);
+        }
+        
+        // Rect to Rect collision (original AABB)
         const box1 = this.getAABB(entity1);
         const box2 = this.getAABB(entity2);
 
@@ -146,17 +165,41 @@ const HitboxHelper = {
             box1.y + box1.height > box2.y
         );
     },
+    
+    // Circle to rectangle collision
+    circleRectCollision(circle, rect) {
+        const box = this.getAABB(rect);
+        const closestX = Math.max(box.x, Math.min(circle.x, box.x + box.width));
+        const closestY = Math.max(box.y, Math.min(circle.y, box.y + box.height));
+        const dx = circle.x - closestX;
+        const dy = circle.y - closestY;
+        return (dx * dx + dy * dy) < (circle.hitbox.radius * circle.hitbox.radius);
+    },
 
     // draw hitbox for debugging
     drawHitbox(ctx, entity, color = '#ff0000') {
-        const box = this.getAABB(entity);
-        ctx.strokeStyle = color;
-        ctx.lineWidth = 2;
-        ctx.strokeRect(box.x, box.y, box.width, box.height);
+        if (entity.hitbox.type === 'circle') {
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(entity.x, entity.y, entity.hitbox.radius, 0, Math.PI * 2);
+            ctx.stroke();
+        } else {
+            const box = this.getAABB(entity);
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2;
+            ctx.strokeRect(box.x, box.y, box.width, box.height);
+        }
     },
 
     // Check if a point (x, y) is within an entity's hitbox
     isPointInHitbox(x, y, entity) {
+        if (entity.hitbox.type === 'circle') {
+            const dx = x - entity.x;
+            const dy = y - entity.y;
+            return Math.sqrt(dx * dx + dy * dy) <= entity.hitbox.radius;
+        }
+        
         const box = this.getAABB(entity);
         return (
             x >= box.x &&
@@ -324,10 +367,8 @@ function spawnEnemy() {
         vy: Math.sin(angle) * speed,
         angle: angle,
         hitbox: {
-            width: enemySize * 1.5,
-            height: enemySize * 1.5,
-            offsetX: 0,
-            offsetY: 0
+            type: 'circle',
+            radius: enemySize * 0.8
         }
     };
     
@@ -348,20 +389,27 @@ function updateEnemies() {
             enemy.vy = (enemy.vy / speed) * enemySpeed * 1.5;
         }
         
+        // Loop enemies around screen edges
         const margin = enemySize * 2;
         if (enemy.x < -margin) enemy.x = canvas.width + margin;
         if (enemy.x > canvas.width + margin) enemy.x = -margin;
         if (enemy.y < -margin) enemy.y = canvas.height + margin;
         if (enemy.y > canvas.height + margin) enemy.y = -margin;
+    }
+    
+    // Check collisions separately to avoid index issues
+    for (let i = enemies.length - 1; i >= 0; i--) {
+        const enemy = enemies[i];
         
-        // Check collision with bullets only (not player)
         for (let j = bullets.length - 1; j >= 0; j--) {
             const bullet = bullets[j];
             if (HitboxHelper.checkCollision(bullet, enemy)) {
                 bullets.splice(j, 1);
                 enemies.splice(i, 1);
                 score += 10;
-                scoreElement.textContent = 'Score: ' + score;
+                if (scoreElement) {
+                    scoreElement.textContent = 'Score: ' + score;
+                }
                 break;
             }
         }
