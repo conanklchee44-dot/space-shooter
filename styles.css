@@ -13,13 +13,3 @@ body {
     display: block;
     cursor: crosshair;
 }
-
-#scoreElement {
-    position: absolute;
-    top: 10px;
-    left: 10px;
-    color: #fff;
-    font-family: 'Pixelify Sans';
-    font-size: 32px;
-    z-index: 100000000;
-}

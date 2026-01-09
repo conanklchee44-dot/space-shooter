@@ -2,7 +2,6 @@ const canvas = document.getElementById('game-canvas');
 const ctx = canvas.getContext('2d');
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
-const scoreElement = document.getElementById('score');
 let playerAngle = 0;
 let score = 0;
 
@@ -407,9 +406,6 @@ function updateEnemies() {
                 bullets.splice(j, 1);
                 enemies.splice(i, 1);
                 score += 10;
-                if (scoreElement) {
-                    scoreElement.textContent = 'Score: ' + score;
-                }
                 break;
             }
         }
@@ -448,6 +444,14 @@ function drawEnemies() {
     }
 }
 
+function drawScore() {
+    ctx.imageSmoothingEnabled = false;
+    ctx.font = '32px "Pixelify Sans"';
+    ctx.fillStyle = '#ffffff';
+    ctx.textBaseline = 'top';
+    ctx.fillText('Score: ' + score, 10, 10);
+}
+
 function gameLoop() {
     ctx.fillStyle = '#000000';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -464,6 +468,7 @@ function gameLoop() {
     drawPlayer();
     drawBullets();
     drawEnemies();
+    drawScore();
     
     requestAnimationFrame(gameLoop);
 }
