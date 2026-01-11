@@ -13,3 +13,5 @@ body {
     display: block;
     cursor: crosshair;
 }
+
+.player { z-index: 500;}

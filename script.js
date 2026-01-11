@@ -4,6 +4,12 @@ canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 let playerAngle = 0;
 let score = 0;
+let kills = 0;
+
+// Game state
+let gameState = 'playing'; // 'playing' or 'upgrade'
+let selectedUpgrade = null;
+let currentUpgrades = []; // Stores the 3 random upgrades for current selection
 
 // player object
 const player = {
@@ -12,6 +18,10 @@ const player = {
     size: 20,
     angle: Math.PI / 2,
     speed: 5,
+    damage: 1,
+    fireRate: 1,
+    bulletCount: 1,
+    spreadAngle: 0.2,
     // hitbox properties
     hitbox: {
         type: 'rect',
@@ -21,6 +31,57 @@ const player = {
         offsetY: 0
     }
 };
+
+// Upgrade definitions
+const upgrades = [
+    {
+        name: 'Faster Speed',
+        description: '+2 Speed',
+        iconImage: 'assets/ships/ship-002.png',
+        apply: () => { player.speed += 2; }
+    },
+    {
+        name: 'Triple Damage',
+        description: '+2 Damage',
+        iconImage: 'assets/ships/ship-003.png',
+        apply: () => { player.damage += 2; }
+    },
+    {
+        name: 'Multishot',
+        description: '+2 Bullets / Shot',
+        iconImage: 'assets/ships/ship-004.png',
+        apply: () => { player.bulletCount += 2; }
+    },
+    {
+        name: 'Short Spread',
+        description: 'Narrower Bullet Spread',
+        requirements: 'Requires Multishot I',
+        iconImage: 'assets/ships/ship-005.png',
+        apply: () => { player.spreadAngle = Math.max(0.05, player.spreadAngle - 0.1); }
+    }
+];
+
+// Preload upgrade icon images
+const upgradeImages = {};
+upgrades.forEach((upgrade, index) => {
+    if (upgrade.iconImage) {
+        const img = new Image();
+        img.src = upgrade.iconImage;
+        upgradeImages[index] = img;
+    }
+});
+
+// Function to select 3 random upgrades
+function selectRandomUpgrades() {
+    console.log('selectRandomUpgrades called, upgrades.length:', upgrades.length);
+    const indices = new Set();
+    while (indices.size < Math.min(3, upgrades.length)) {
+        indices.add(Math.floor(Math.random() * upgrades.length));
+    }
+    const selected = Array.from(indices).map(i => ({ upgrade: upgrades[i], originalIndex: i }));
+    console.log('Selected upgrades:', selected.length, selected);
+    return selected;
+}
 
 const mouse = {
     x: canvas.width / 2,
@@ -60,6 +121,12 @@ window.addEventListener('keydown', (e) => {
         showHitboxes = !showHitboxes;
         console.log('Hitbox display:', showHitboxes ? 'ON' : 'OFF');
     }
+    if (e.key === 'F2') {
+        e.preventDefault();
+        if (showHitboxes) {
+            gameState = gameState === 'playing' ? 'upgrade' : 'playing';
+        }
+    }
 });
 
 window.addEventListener('keyup', (e) => {
@@ -98,23 +165,56 @@ canvas.addEventListener('mousemove', (e) => {
 });
 
 canvas.addEventListener('click', (e) => {
-    if (HitboxHelper.isPointInHitbox(mouse.x, mouse.y, player)) { return; }
-    const bullet = {
-        x: player.x,
-        y: player.y,
-        angle: player.angle,
-        vx: Math.cos(player.angle) * bulletSpeed,
-        vy: Math.sin(player.angle) * bulletSpeed,
-        size: bulletSize,
-        hitbox: {
-            type: 'rect',
-            width: bulletSize * 2,
-            height: bulletSize * 2,
-            offsetX: 0,
-            offsetY: 0
+    if (gameState === 'upgrade') {
+        // Check if clicking on an upgrade (updated positions to match drawUpgradeMenu)
+        const boxWidth = 300;
+        const boxHeight = 150;
+        const spacing = 50;
+        const startX = (canvas.width - (boxWidth * 3 + spacing * 2)) / 2;
+        const startY = 120; // Position near top
+        
+        for (let i = 0; i < currentUpgrades.length; i++) {
+            const x = startX + i * (boxWidth + spacing);
+            const y = startY;
+            
+            if (mouse.x >= x && mouse.x <= x + boxWidth &&
+                mouse.y >= y && mouse.y <= y + boxHeight) {
+                // Apply upgrade
+                currentUpgrades[i].upgrade.apply();
+                gameState = 'playing';
+                kills = 0; // Reset kill counter
+                return;
+            }
         }
-    };
-    bullets.push(bullet);
+    } else {
+        // Playing state - shoot bullets
+        if (HitboxHelper.isPointInHitbox(mouse.x, mouse.y, player)) { return; }
+        
+        // Fire multiple bullets based on bulletCount
+        const totalSpread = (player.bulletCount - 1) * player.spreadAngle;
+        const startAngle = player.angle - totalSpread / 2;
+        
+        for (let i = 0; i < player.bulletCount; i++) {
+            const bulletAngle = startAngle + i * player.spreadAngle;
+            const bullet = {
+                x: player.x,
+                y: player.y,
+                angle: bulletAngle,
+                vx: Math.cos(bulletAngle) * bulletSpeed,
+                vy: Math.sin(bulletAngle) * bulletSpeed,
+                size: bulletSize,
+                damage: player.damage,
+                hitbox: {
+                    type: 'rect',
+                    width: bulletSize * 2,
+                    height: bulletSize * 2,
+                    offsetX: 0,
+                    offsetY: 0
+                }
+            };
+            bullets.push(bullet);
+        }
+    }
 });
 
 const InputHelper = {
@@ -365,6 +465,8 @@ function spawnEnemy() {
         vx: Math.cos(angle) * speed,
         vy: Math.sin(angle) * speed,
         angle: angle,
+        hp: 4,
+        hitFlash: 0,
         hitbox: {
             type: 'circle',
             radius: enemySize * 0.8
@@ -388,6 +490,11 @@ function updateEnemies() {
             enemy.vy = (enemy.vy / speed) * enemySpeed * 1.5;
         }
         
+        // Decrement flash timer
+        if (enemy.hitFlash > 0) {
+            enemy.hitFlash--;
+        }
+        
         // Loop enemies around screen edges
         const margin = enemySize * 2;
         if (enemy.x < -margin) enemy.x = canvas.width + margin;
@@ -404,8 +511,22 @@ function updateEnemies() {
             const bullet = bullets[j];
             if (HitboxHelper.checkCollision(bullet, enemy)) {
                 bullets.splice(j, 1);
-                enemies.splice(i, 1);
-                score += 10;
+                enemy.hp -= bullet.damage;
+                enemy.hitFlash = 10; // Flash for 10 frames
+                if (enemy.hp <= 0) {
+                    enemies.splice(i, 1);
+                    score += 10;
+                    kills += 1;
+                    console.log('Kill count:', kills);
+                    
+                    // Check if reached upgrade threshold
+                    if (kills >= 10) {
+                        console.log('Reached 10 kills, triggering upgrade menu');
+                        currentUpgrades = selectRandomUpgrades();
+                        console.log('currentUpgrades after selection:', currentUpgrades);
+                        gameState = 'upgrade';
+                    }
+                }
                 break;
             }
         }
@@ -419,6 +540,11 @@ function drawEnemies() {
         ctx.translate(enemy.x, enemy.y);
         ctx.rotate(enemy.angle);
         ctx.imageSmoothingEnabled = false;
+        
+        // Apply white flash effect
+        if (enemy.hitFlash > 0) {
+            ctx.filter = 'brightness(3)';
+        }
         
         if (enemyImageLoaded) {
             ctx.drawImage(
@@ -436,6 +562,7 @@ function drawEnemies() {
             ctx.fill();
         }
         
+        ctx.filter = 'none';
         ctx.restore();
         
         if (showHitboxes) {
@@ -445,30 +572,114 @@ function drawEnemies() {
 }
 
 function drawScore() {
-    ctx.imageSmoothingEnabled = false;
-    ctx.font = '32px "Pixelify Sans"';
-    ctx.fillStyle = '#ffffff';
-    ctx.textBaseline = 'top';
-    ctx.fillText('Score: ' + score, 10, 10);
+    drawPixelText('Score: ' + score, 10, 10, 3);
 }
 
-function gameLoop() {
+// Draw upgrade menu
+function drawUpgradeMenu() {
+    // Draw space background (black)
     ctx.fillStyle = '#000000';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     
-    // Spawn enemies randomly
-    if (Math.random() < 0.02) { // 2% chance each frame
-        spawnEnemy();
+    // Draw title
+    const title = 'Upgrades';
+    drawPixelText(title, canvas.width / 2 - (title.length * 18) / 2, 30, 4);
+    
+    console.log('Drawing upgrade menu, currentUpgrades.length:', currentUpgrades.length);
+    
+    // Draw upgrade boxes at the top
+    const boxWidth = 300;
+    const boxHeight = 150;
+    const spacing = 50;
+    const startX = (canvas.width - (boxWidth * 3 + spacing * 2)) / 2;
+    const startY = 120; // Position near top
+    
+    for (let i = 0; i < currentUpgrades.length; i++) {
+        const upgrade = currentUpgrades[i].upgrade;
+        const originalIndex = currentUpgrades[i].originalIndex;
+        const x = startX + i * (boxWidth + spacing);
+        const y = startY;
+        
+        // Check if mouse is hovering
+        const isHover = mouse.x >= x && mouse.x <= x + boxWidth &&
+                       mouse.y >= y && mouse.y <= y + boxHeight;
+        
+        // Draw hover background (no border)
+        if (isHover) {
+            ctx.fillStyle = 'rgba(0, 255, 0, 0.1)';
+            ctx.fillRect(x, y, boxWidth, boxHeight);
+        }
+        
+        // Draw icon at top center (image or emoji)
+        const iconSize = 64;
+        if (upgrade.iconImage && upgradeImages[originalIndex] && upgradeImages[originalIndex].complete) {
+            // Draw image icon
+            const imgX = x + boxWidth / 2 - iconSize / 2;
+            const imgY = y + 15;
+            ctx.drawImage(upgradeImages[originalIndex], imgX, imgY, iconSize, iconSize);
+            
+            // Apply green tint if hovering
+            if (isHover) {
+                ctx.globalAlpha = 0.3;
+                ctx.fillStyle = '#00ff00';
+                ctx.fillRect(imgX, imgY, iconSize, iconSize);
+                ctx.globalAlpha = 1.0;
+            }
+        } else {
+            // Draw emoji icon
+            ctx.font = '64px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
+            ctx.fillStyle = isHover ? '#00ff00' : '#ffffff';
+            ctx.fillText(upgrade.icon, x + boxWidth / 2, y + 15);
+        }
+        
+        // Draw upgrade name
+        drawPixelText(upgrade.name, x + 20, y + 90, 2);
+        
+        // Draw description
+        drawPixelText(upgrade.description, x + 20, y + 115, 2);
+        
+        // Draw requirements if they exist
+        if (upgrade.requirements) {
+            drawPixelText(upgrade.requirements, x + 10, y + 135, 1, '#ffff00');
+        }
     }
-    
-    PlayerMovement.update(player, mouse, keys, { width: canvas.width, height: canvas.height });
-    updateBullets();
-    updateEnemies();
-    
-    drawPlayer();
-    drawBullets();
-    drawEnemies();
-    drawScore();
+}
+
+function gameLoop() {
+    if (gameState === 'playing') {
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // Spawn enemies randomly
+        if (Math.random() < 0.02) { // 2% chance each frame
+            spawnEnemy();
+        }
+        
+        PlayerMovement.update(player, mouse, keys, { width: canvas.width, height: canvas.height });
+        updateBullets();
+        updateEnemies();
+        
+        drawBullets();
+        drawEnemies();
+        drawScore();
+        drawPlayer();
+    } else if (gameState === 'upgrade') {
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        PlayerMovement.update(player, mouse, keys, { width: canvas.width, height: canvas.height });
+        updateBullets();
+        updateEnemies();
+        drawBullets();
+        drawEnemies();
+        
+        // Draw upgrade menu on top
+        drawUpgradeMenu();
+        
+        // Draw player on top of everything
+        drawPlayer();
+    }
     
     requestAnimationFrame(gameLoop);
 }
